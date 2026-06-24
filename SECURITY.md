@@ -1,6 +1,6 @@
 # Security Policy
 
-CardPulse SaaS handles vendor inventory, sales, buybacks, expenses, staff access, and business reporting. Treat all tenant data as confidential.
+Vendy handles vendor inventory, sales, buybacks, expenses, staff access, and business reporting. Treat all tenant data as confidential.
 
 ## Reporting Issues
 
@@ -38,4 +38,3 @@ Before external beta:
 - Service-role key absent from frontend build.
 - Critical mutations use RPC or server routes.
 - Audit logs exist for destructive/corrective actions.
-

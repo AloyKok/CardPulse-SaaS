@@ -70,7 +70,7 @@ function ProtectedApp() {
 }
 
 function CreateOrgScreen() {
-  const [name, setName] = useState('CardPulse Booth');
+  const [name, setName] = useState('Vendy Demo Booth');
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: () => bootstrapOwnerOrg(name),

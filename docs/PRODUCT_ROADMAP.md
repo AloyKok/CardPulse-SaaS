@@ -1,8 +1,8 @@
-# Product Roadmap
+# Vendy Product Roadmap
 
 ## Phase 0: Preserve Internal CardPulse
 
-Do not break the existing internal production app while building SaaS.
+Do not break the existing internal CardPulse production app while building Vendy.
 
 Keep `/Users/aloykok/Documents/CardPulse Transaction` as the operating system for real shows until SaaS production is ready.
 
@@ -22,7 +22,7 @@ Goal: make the current product safe for multiple vendors.
 Exit criteria:
 
 - Two test vendors can use the same app without seeing each other's data.
-- CardPulse remains a normal tenant, not a hardcoded special case.
+- CardPulse can later become a normal tenant, but its current production inventory remains on the existing CardPulse database until migration is planned.
 
 ## Phase 2: TCG Abstraction
 
@@ -97,7 +97,7 @@ Goal: learn from real vendors before public launch.
 
 Exit criteria:
 
-- At least two external vendors complete a real show using CardPulse.
+- At least two external vendors complete a real show using Vendy.
 
 ## Phase 6: Public Launch
 
@@ -115,4 +115,3 @@ Goal: sell the product.
 Exit criteria:
 
 - New vendor can self-serve from signup to first sale.
-

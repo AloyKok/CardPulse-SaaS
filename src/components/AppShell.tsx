@@ -47,7 +47,7 @@ export function AppShell() {
     <div className="min-h-dvh min-w-0 overflow-x-clip bg-[#f3f6f8] text-ink lg:grid lg:grid-cols-[18rem_minmax(0,1fr)]">
       <aside className="sticky top-0 hidden h-dvh border-r border-line bg-white px-4 py-5 lg:grid lg:grid-rows-[auto_1fr_auto]">
         <div className="min-w-0">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-action">CardPulse</p>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-action">Vendy</p>
           <h1 className="mt-1 truncate text-xl font-black">{organization.name}</h1>
           {isLocalDemoMode && <span className="mt-3 inline-flex rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase text-amber-900">Local demo</span>}
         </div>
@@ -87,7 +87,7 @@ export function AppShell() {
           <div className="flex min-w-0 items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <p className="text-xs font-black uppercase tracking-wide text-action">CardPulse</p>
+                <p className="text-xs font-black uppercase tracking-wide text-action">Vendy</p>
                 {isLocalDemoMode && <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-900">Local demo</span>}
               </div>
               <h1 className="truncate text-lg font-black leading-tight">{organization.name}</h1>

@@ -22,7 +22,7 @@ export function AuthScreen() {
   return (
     <div className="grid min-h-dvh place-items-center bg-[#f3f6f8] p-4">
       <div className="w-full max-w-sm rounded-2xl border border-line bg-white p-6 shadow-soft">
-        <p className="text-xs font-black uppercase tracking-[0.18em] text-action">CardPulse</p>
+        <p className="text-xs font-black uppercase tracking-[0.18em] text-action">Vendy</p>
         <h1 className="mt-1 text-3xl font-black tracking-tight">Sign in</h1>
         {!hasSupabaseConfig && (
           <p className="mt-3 rounded-md bg-amber-50 p-3 text-sm text-amber-900">Set Supabase env vars before signing in.</p>

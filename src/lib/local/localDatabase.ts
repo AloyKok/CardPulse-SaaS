@@ -725,7 +725,7 @@ export function generateLocalItemNumber(
 
 function createSeedDatabase(): LocalDatabase {
   const now = new Date().toISOString();
-  const organization: Organization = { id: LOCAL_ORG_ID, name: 'CardPulse Demo Booth', createdAt: now };
+  const organization: Organization = { id: LOCAL_ORG_ID, name: 'Vendy Demo Booth', createdAt: now };
   const inventory: InventoryItem[] = [
     seedItem('11111111-1111-4111-8111-111111111111', 'OP-OP05-060-NM-001', 'Monkey D. Luffy', 'OP05-060', '[OP-05] Awakening of the New Era', 'Leader', 'Parallel', 'EN', 'Leader', 'NM', 1, 45, 74.99, now),
     seedItem('22222222-2222-4222-8222-222222222222', 'OP-OP05-119-NM-001', 'Monkey D. Luffy', 'OP05-119', '[OP-05] Awakening of the New Era', 'SEC', 'Base', 'EN', 'Character', 'NM', 1, 55, 89.99, now),

@@ -1,8 +1,8 @@
-# SaaS Architecture
+# Vendy SaaS Architecture
 
 ## Goal
 
-Build CardPulse as a multi-tenant SaaS for TCG vendors while keeping CardPulse itself as the first production tenant.
+Build Vendy as a multi-tenant SaaS for TCG vendors while keeping CardPulse as the existing internal operating system until a deliberate migration is planned.
 
 The first commercial wedge is card-show operations:
 
@@ -150,16 +150,15 @@ Do not run experimental migrations against the current internal CardPulse produc
 Recommended Vercel projects:
 
 ```text
-cardpulse-saas-preview
-cardpulse-saas-production
+vendy-preview
+vendy-production
 ```
 
 Recommended domains:
 
 ```text
-app.cardpulse.net
-admin.cardpulse.net
+app.vendy.app
+admin.vendy.app
 ```
 
-Keep `cartpulse.net/admin` or the current production app separate until SaaS migration is complete.
-
+Keep `cardpulse.net/admin` or the current production app separate until a SaaS migration is intentionally scheduled.
