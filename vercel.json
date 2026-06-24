@@ -1,13 +1,6 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "redirects": [
-    {
-      "source": "/",
-      "destination": "/admin",
-      "permanent": false
-    }
-  ],
   "crons": [
     {
       "path": "/api/cron/refresh-yuyutei-market",
@@ -15,6 +8,10 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/",
+      "destination": "/admin/maintenance.html"
+    },
     {
       "source": "/admin",
       "destination": "/admin/index.html"
