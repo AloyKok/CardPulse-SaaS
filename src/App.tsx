@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { lazy, Suspense, useState } from 'react';
 import { AppShell } from './components/AppShell';
 import { useAuth } from './lib/supabase/AuthProvider';
-import { OrgProvider, useMembershipsQuery } from './lib/org/OrgProvider';
+import { OrgProvider, useMyMembershipsQuery } from './lib/org/OrgProvider';
 import { acceptInvite, bootstrapOwnerOrg } from './lib/supabase/api';
 import { Button } from './components/Button';
 import { Field, TextInput } from './components/Field';
@@ -38,7 +38,7 @@ export function App() {
 
 function ProtectedApp() {
   const { user, loading } = useAuth();
-  const membershipsQuery = useMembershipsQuery();
+  const membershipsQuery = useMyMembershipsQuery();
 
   if (loading) return <FullScreenMessage message="Loading session..." />;
   if (!user) return <Navigate to="/auth" replace />;

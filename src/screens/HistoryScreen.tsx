@@ -25,7 +25,7 @@ import {
   voidBuyback,
   voidSale
 } from '../lib/supabase/api';
-import { useMembershipsQuery, useOrg } from '../lib/org/OrgProvider';
+import { useOrg, useOrgMembershipsQuery } from '../lib/org/OrgProvider';
 import type { Buyback, Transaction } from '../types/domain';
 
 export function HistoryScreen() {
@@ -41,7 +41,7 @@ export function HistoryScreen() {
   const buybacksQuery = useQuery({ queryKey: ['buybacks', organization.id], queryFn: () => listBuybacks(organization.id, 5000) });
   const eventsQuery = useQuery({ queryKey: ['events', organization.id], queryFn: () => listEvents(organization.id) });
   const settingsQuery = useQuery({ queryKey: ['settings', organization.id], queryFn: () => getSettings(organization.id) });
-  const membershipsQuery = useMembershipsQuery();
+  const membershipsQuery = useOrgMembershipsQuery(organization.id);
   const mutation = useMutation({
     mutationFn: (id: string) => voidSale(organization.id, id),
     onSuccess: async () => {

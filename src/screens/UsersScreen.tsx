@@ -2,14 +2,14 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../components/Button';
 import { PageHeader } from '../components/Page';
 import { removeMembership } from '../lib/supabase/api';
-import { useMembershipsQuery, useOrg } from '../lib/org/OrgProvider';
+import { useOrg, useOrgMembershipsQuery } from '../lib/org/OrgProvider';
 import { useAuth } from '../lib/supabase/AuthProvider';
 
 export function UsersScreen() {
   const { organization, isOwner } = useOrg();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const membershipsQuery = useMembershipsQuery();
+  const membershipsQuery = useOrgMembershipsQuery(organization.id);
   const removeMutation = useMutation({
     mutationFn: (id: string) => removeMembership(organization.id, id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['memberships'] })

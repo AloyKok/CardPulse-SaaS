@@ -156,6 +156,33 @@ export async function listMemberships() {
   return ((data || []) as unknown as Array<Database['public']['Tables']['memberships']['Row'] & { organizations?: Database['public']['Tables']['organizations']['Row'] | null }>).map(mapMembership);
 }
 
+export async function listMyMemberships() {
+  if (isLocalDemoMode) {
+    const user = await getSessionUser();
+    return getLocalMemberships().filter((membership) => !user || membership.userId === user.id);
+  }
+  const user = await getSessionUser();
+  if (!user) return [];
+  const { data, error } = await supabase
+    .from('memberships')
+    .select('*, organizations(*)')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return ((data || []) as unknown as Array<Database['public']['Tables']['memberships']['Row'] & { organizations?: Database['public']['Tables']['organizations']['Row'] | null }>).map(mapMembership);
+}
+
+export async function listOrgMemberships(orgId: string) {
+  if (isLocalDemoMode) return getLocalMemberships().filter((membership) => membership.orgId === orgId);
+  const { data, error } = await supabase
+    .from('memberships')
+    .select('*, organizations(*)')
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return ((data || []) as unknown as Array<Database['public']['Tables']['memberships']['Row'] & { organizations?: Database['public']['Tables']['organizations']['Row'] | null }>).map(mapMembership);
+}
+
 export async function bootstrapOwnerOrg(name: string) {
   if (isLocalDemoMode) return getLocalDatabase().organization;
   const { data, error } = await supabase.rpc('bootstrap_owner_org', { p_org_name: name });

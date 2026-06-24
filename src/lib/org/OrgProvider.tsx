@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { listMemberships } from '../supabase/api';
+import { listMemberships, listMyMemberships, listOrgMemberships } from '../supabase/api';
 import type { Membership, Organization } from '../../types/domain';
 import { useAuth } from '../supabase/AuthProvider';
 
@@ -13,17 +13,35 @@ interface OrgContextValue {
 
 const OrgContext = createContext<OrgContextValue | undefined>(undefined);
 
-export function useMembershipsQuery() {
+export function useMembershipsQuery(orgId?: string) {
   const { user } = useAuth();
   return useQuery({
-    queryKey: ['memberships', user?.id],
-    queryFn: listMemberships,
+    queryKey: ['memberships', orgId || 'visible', user?.id],
+    queryFn: () => orgId ? listOrgMemberships(orgId) : listMemberships(),
+    enabled: Boolean(user)
+  });
+}
+
+export function useOrgMembershipsQuery(orgId?: string) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['memberships', orgId],
+    queryFn: () => listOrgMemberships(orgId || ''),
+    enabled: Boolean(user && orgId)
+  });
+}
+
+export function useMyMembershipsQuery() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['my-memberships', user?.id],
+    queryFn: listMyMemberships,
     enabled: Boolean(user)
   });
 }
 
 export function OrgProvider({ children }: { children: ReactNode }) {
-  const membershipsQuery = useMembershipsQuery();
+  const membershipsQuery = useMyMembershipsQuery();
   const membership = membershipsQuery.data?.[0];
   const organization = membership?.organization;
 

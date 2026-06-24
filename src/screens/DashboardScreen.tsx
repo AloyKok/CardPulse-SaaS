@@ -9,7 +9,7 @@ import { lineFinalProfit, lineFinalTotal } from '../lib/reports/profit';
 import { getLocalDateKey, getLocalMonthKey, getRevenueMonth } from '../lib/reports/revenuePeriods';
 import { getQueuedSales } from '../lib/queue/offlineQueue';
 import { getSettings, listBuybacks, listEvents, listInventory, listMarketPriceSnapshots, listTransactions } from '../lib/supabase/api';
-import { useMembershipsQuery, useOrg } from '../lib/org/OrgProvider';
+import { useOrg, useOrgMembershipsQuery } from '../lib/org/OrgProvider';
 import type { Buyback, InventoryItem, MarketPriceSnapshot, Settings, ShowEvent, Transaction } from '../types/domain';
 
 type TimePeriod = 'today' | 'show' | 'month' | 'custom';
@@ -29,7 +29,7 @@ export function DashboardScreen() {
   const eventsQuery = useQuery({ queryKey: ['events', organization.id], queryFn: () => listEvents(organization.id) });
   const settingsQuery = useQuery({ queryKey: ['settings', organization.id], queryFn: () => getSettings(organization.id) });
   const queueQuery = useQuery({ queryKey: ['pending-sales'], queryFn: getQueuedSales, refetchInterval: 15000 });
-  const membershipsQuery = useMembershipsQuery();
+  const membershipsQuery = useOrgMembershipsQuery(organization.id);
 
   const inventory = useMemo(() => inventoryQuery.data || [], [inventoryQuery.data]);
   const transactions = useMemo(() => salesQuery.data || [], [salesQuery.data]);
