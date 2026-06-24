@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Papa from 'papaparse';
 import { Button } from '../components/Button';
 import { Field, TextArea } from '../components/Field';
+import { PageHeader, Surface } from '../components/Page';
+import { lineFinalProfit, lineFinalTotal, lineFinalUnitPrice } from '../lib/reports/profit';
 import { getRevenueMonth } from '../lib/reports/revenuePeriods';
 import { listEvents, listInventory, listTransactions, saveInventoryItem, type InventoryInput } from '../lib/supabase/api';
 import { useOrg } from '../lib/org/OrgProvider';
@@ -22,7 +24,7 @@ export function ImportExportScreen() {
   const queryClient = useQueryClient();
   const [csv, setCsv] = useState('');
   const [report, setReport] = useState<string[]>([]);
-  const inventoryQuery = useQuery({ queryKey: ['inventory', organization.id, 'export'], queryFn: () => listInventory(organization.id) });
+  const inventoryQuery = useQuery({ queryKey: ['inventory', organization.id, 'export'], queryFn: () => listInventory(organization.id, undefined, { includeImages: true }) });
   const salesQuery = useQuery({ queryKey: ['history', organization.id], queryFn: () => listTransactions(organization.id, 5000) });
   const eventsQuery = useQuery({ queryKey: ['events', organization.id], queryFn: () => listEvents(organization.id) });
   const importMutation = useMutation({
@@ -44,7 +46,7 @@ export function ImportExportScreen() {
             art: row.art ? row.art as CardArt : null,
             language: (row.language || 'EN') as CardLanguage,
             category: row.category ? row.category as CardCategory : null,
-            condition: row.condition || (row.item_type === 'sealed_product' ? 'SEALED' : row.item_type === 'mystery_pack' ? 'NEW' : 'NM'),
+            condition: row.condition || (row.item_type === 'sealed_product' ? 'SEALED' : row.item_type === 'mystery_pack' ? 'NEW' : 'MINT'),
             gradeCompany: row.grade_company || null,
             grade: row.grade || null,
             certNumber: row.cert_number || null,
@@ -128,9 +130,11 @@ export function ImportExportScreen() {
       category: line.categorySnapshot || '',
       quantity: line.quantity,
       unit_price: line.unitPrice,
+      final_unit_price: lineFinalUnitPrice(tx, line),
       unit_cost: line.costUnknown ? '' : line.unitCost,
       line_total: line.lineTotal,
-      line_profit: line.costUnknown ? '' : line.lineProfit,
+      final_line_total: lineFinalTotal(tx, line),
+      line_profit: line.costUnknown ? '' : lineFinalProfit(tx, line),
       created_by: tx.createdBy
     }))
     ));
@@ -138,8 +142,8 @@ export function ImportExportScreen() {
 
   return (
     <div className="grid gap-4">
-      <h2 className="text-2xl font-black">Import / Export</h2>
-      <section className="grid gap-3 rounded-lg border border-line bg-white p-3">
+      <PageHeader eyebrow="Data operations" title="Import / Export" description="CSV import, sales export, inventory export, and owner backup." />
+      <Surface className="grid gap-3">
         <h3 className="font-black">CSV import</h3>
         <p className="break-words text-sm text-slate-600">Columns: item_number, item_type, product_category, item_name, card_number, set_name, rarity, art, language, category, condition, grade_company, grade, cert_number, quantity, cost_basis, floor_price, asking_price, market_price, location, acquisition_source, acquisition_date, listed_online, tags, image_url, notes. Use | between tags. Leave item_number blank to auto-generate it.</p>
         <Field label="Inventory CSV">
@@ -147,7 +151,7 @@ export function ImportExportScreen() {
         </Field>
         <Button onClick={() => importMutation.mutate()} disabled={!csv || importMutation.isPending}>Import inventory</Button>
         {report.length > 0 && <pre className="max-h-64 min-w-0 overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-slate-950 p-3 text-xs text-white">{report.join('\n')}</pre>}
-      </section>
+      </Surface>
       <ExportBlock title="Inventory CSV" text={inventoryCsv} filename="cardpulse-inventory.csv" />
       <ExportBlock title="Sales CSV" text={salesCsv} filename="cardpulse-sales.csv" />
       {isOwner && <ExportBlock title="Owner JSON backup" text={JSON.stringify({ inventory: inventoryQuery.data || [], sales: salesQuery.data || [] }, null, 2)} filename="cardpulse-backup.json" />}
@@ -167,9 +171,9 @@ function ExportBlock({ title, text, filename }: { title: string; text: string; f
   };
 
   return (
-    <section className="grid gap-3 rounded-lg border border-line bg-white p-3">
+    <Surface className="grid gap-3">
       <h3 className="font-black">{title}</h3>
       <Button variant="secondary" onClick={download}>Download</Button>
-    </section>
+    </Surface>
   );
 }

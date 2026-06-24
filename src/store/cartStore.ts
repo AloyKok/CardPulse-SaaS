@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { CartLine, InventoryItem, PaymentMethod } from '../types/domain';
-import type { SaleMode } from '../lib/reports/revenuePeriods';
+import { getLocalDateKey, type SaleMode } from '../lib/reports/revenuePeriods';
 
 interface CartState {
   lines: CartLine[];
@@ -21,10 +21,47 @@ interface CartState {
   clear: () => void;
 }
 
+const SALE_CONTEXT_KEY = 'cardpulse-sale-context';
+
+interface PersistedSaleContext {
+  date: string;
+  saleMode: SaleMode | '';
+  eventId: string;
+}
+
+function loadSaleContext(): Pick<CartState, 'saleMode' | 'eventId'> {
+  try {
+    const raw = window.localStorage.getItem(SALE_CONTEXT_KEY);
+    if (!raw) return { saleMode: '', eventId: '' };
+    const parsed = JSON.parse(raw) as Partial<PersistedSaleContext>;
+    if (parsed.date !== getLocalDateKey()) {
+      window.localStorage.removeItem(SALE_CONTEXT_KEY);
+      return { saleMode: '', eventId: '' };
+    }
+    return {
+      saleMode: parsed.saleMode === 'daily' || parsed.saleMode === 'show' ? parsed.saleMode : '',
+      eventId: typeof parsed.eventId === 'string' ? parsed.eventId : ''
+    };
+  } catch {
+    return { saleMode: '', eventId: '' };
+  }
+}
+
+function saveSaleContext(saleMode: SaleMode | '', eventId: string) {
+  try {
+    const payload: PersistedSaleContext = { date: getLocalDateKey(), saleMode, eventId };
+    window.localStorage.setItem(SALE_CONTEXT_KEY, JSON.stringify(payload));
+  } catch {
+    // Sale context persistence is convenience-only; checkout still works without storage.
+  }
+}
+
+const initialSaleContext = loadSaleContext();
+
 export const useCartStore = create<CartState>((set) => ({
   lines: [],
-  saleMode: '',
-  eventId: '',
+  saleMode: initialSaleContext.saleMode,
+  eventId: initialSaleContext.eventId,
   finalTotal: null,
   paymentMethod: 'cash',
   notes: '',
@@ -77,8 +114,16 @@ export const useCartStore = create<CartState>((set) => ({
     lines: state.lines.filter((line) => lineIdFor(line) !== lineId),
     finalTotal: null
   })),
-  setSaleMode: (saleMode) => set({ saleMode }),
-  setEventId: (eventId) => set({ eventId }),
+  setSaleMode: (saleMode) =>
+    set((state) => {
+      saveSaleContext(saleMode, saleMode === 'daily' ? '' : state.eventId);
+      return { saleMode, eventId: saleMode === 'daily' ? '' : state.eventId };
+    }),
+  setEventId: (eventId) =>
+    set((state) => {
+      saveSaleContext(state.saleMode, eventId);
+      return { eventId };
+    }),
   setFinalTotal: (finalTotal) => set({ finalTotal: finalTotal === null ? null : Math.max(0, finalTotal) }),
   setPaymentMethod: (method) => set({ paymentMethod: method }),
   setNotes: (notes) => set({ notes }),

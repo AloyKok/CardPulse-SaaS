@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../components/Button';
 import { Field, SelectInput, TextInput } from '../components/Field';
-import { formatEventPeriod } from '../lib/events/dateRange';
+import { PageHeader } from '../components/Page';
+import { formatShowEventOptionLabel, getShowEventTiming, sortShowEventOptions } from '../lib/events/dateRange';
 import { getSettings, listEvents, updateSettings } from '../lib/supabase/api';
 import { useOrg } from '../lib/org/OrgProvider';
 import type { CardLanguage } from '../types/domain';
@@ -16,8 +17,8 @@ export function SettingsScreen() {
   const eventsQuery = useQuery({ queryKey: ['events', organization.id], queryFn: () => listEvents(organization.id) });
   const [currency, setCurrency] = useState('USD');
   const [currencySymbol, setCurrencySymbol] = useState('S$');
-  const [defaultCondition, setDefaultCondition] = useState('NM');
-  const [defaultLanguage, setDefaultLanguage] = useState<CardLanguage>('EN');
+  const [defaultCondition, setDefaultCondition] = useState('MINT');
+  const [defaultLanguage, setDefaultLanguage] = useState<CardLanguage>('JP');
   const [activeEventId, setActiveEventId] = useState('');
   const [labelSheetPreset, setLabelSheetPreset] = useState('30-up-avery-5160');
   const [agingThresholdDays, setAgingThresholdDays] = useState(60);
@@ -43,9 +44,9 @@ export function SettingsScreen() {
 
   return (
     <div className="grid gap-4">
-      <h2 className="text-2xl font-black">Settings</h2>
+      <PageHeader eyebrow="Controls" title="Settings" description="Currency, default inventory values, active show, labels, and owner-only maintenance." />
       {!isOwner && <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-900">Only owners can change settings.</p>}
-      <form className="grid gap-3 rounded-lg border border-line bg-white p-3" onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }}>
+      <form className="grid gap-3 rounded-2xl border border-line bg-white p-4 shadow-sm sm:p-5" onSubmit={(event) => { event.preventDefault(); mutation.mutate(); }}>
         <div className="grid gap-3 min-[400px]:grid-cols-2">
           <Field label="Currency"><TextInput value={currency} onChange={(event) => setCurrency(event.target.value.toUpperCase())} disabled={!isOwner} /></Field>
           <Field label="Currency symbol"><TextInput value={currencySymbol} onChange={(event) => setCurrencySymbol(event.target.value)} disabled={!isOwner} placeholder="S$" /></Field>
@@ -82,7 +83,7 @@ export function SettingsScreen() {
               disabled={!isOwner}
               options={[
                 { value: '', label: 'None' },
-                ...(eventsQuery.data || []).map((event) => ({ value: event.id, label: `${event.name} / ${formatEventPeriod(event)}` }))
+                ...sortShowEventOptions(eventsQuery.data || []).map((event) => ({ value: event.id, label: formatShowEventOptionLabel(event), muted: getShowEventTiming(event) === 'past' }))
               ]}
             />
           </Field>
@@ -93,7 +94,7 @@ export function SettingsScreen() {
         <Button type="submit" disabled={!isOwner || mutation.isPending}>{mutation.isPending ? 'Saving...' : 'Save settings'}</Button>
       </form>
       {isOwner && (
-        <section className="rounded-lg border border-red-200 bg-red-50 p-3">
+        <section className="rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm">
           <h3 className="font-black text-danger">Danger zone</h3>
           {isLocalDemoMode ? (
             <>

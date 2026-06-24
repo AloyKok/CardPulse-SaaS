@@ -1,6 +1,6 @@
 export type MemberRole = 'owner' | 'admin';
 export type CardLanguage = 'EN' | 'JP' | 'OTHER';
-export type CardRarity = 'C' | 'UC' | 'R' | 'SR' | 'SEC' | 'Leader' | 'Promo';
+export type CardRarity = 'C' | 'UC' | 'R' | 'SR' | 'SEC' | 'Leader' | 'Promo' | 'Gold' | 'Foil';
 export type CardArt = 'Base' | 'Parallel' | 'Manga' | 'SP';
 export type CardCategory = 'Character' | 'Leader' | 'Event' | 'Stage' | 'DON';
 export type InventoryItemType = 'single_card' | 'sealed_product' | 'mystery_pack';
@@ -8,7 +8,10 @@ export type SealedProductType = 'booster_box' | 'booster_pack' | 'starter_deck' 
 export type InventoryStatus = 'in_stock' | 'sold_out' | 'reserved';
 export type PaymentMethod = 'cash' | 'card' | 'other';
 export type TransactionStatus = 'completed' | 'voided';
-export type MarketSource = 'yuyutei';
+export type BuybackStatus = 'completed' | 'voided';
+export type BuybackProcessingStatus = 'unprocessed' | 'partially_processed' | 'processed';
+export type MarketSource = 'yuyutei' | 'snkrdunk';
+export type ShowExpenseCategory = 'booth_fee' | 'parking' | 'food' | 'transport' | 'supplies' | 'other';
 
 export interface Organization {
   id: string;
@@ -99,6 +102,38 @@ export interface Transaction {
   clientRef?: string | null;
   voidedAt?: string | null;
   voidedBy?: string | null;
+}
+
+export interface Buyback {
+  id: string;
+  orgId: string;
+  createdAt: string;
+  createdBy: string;
+  eventId?: string | null;
+  sellerName?: string | null;
+  itemSummary: string;
+  itemCount: number;
+  totalPaid: number;
+  paymentMethod: PaymentMethod;
+  status: BuybackStatus;
+  processingStatus: BuybackProcessingStatus;
+  processedAt?: string | null;
+  notes?: string | null;
+  voidedAt?: string | null;
+  voidedBy?: string | null;
+}
+
+export interface ShowExpense {
+  id: string;
+  orgId: string;
+  eventId: string;
+  createdAt: string;
+  createdBy: string;
+  category: ShowExpenseCategory;
+  description: string;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  notes?: string | null;
 }
 
 export interface ShowEvent {
@@ -209,3 +244,22 @@ export interface YuyuteiMarketCandidate {
   availability?: string | null;
   imageUrl?: string | null;
 }
+
+export interface SnkrdunkMarketCandidate {
+  source: 'snkrdunk';
+  mode: 'ask';
+  sourceUrl: string;
+  externalId?: string | null;
+  conditionId?: number | null;
+  conditionName?: string | null;
+  cardNumber?: string | null;
+  rarity?: string | null;
+  name: string;
+  displayName: string;
+  price: number;
+  currency: 'SGD';
+  availability?: string | null;
+  imageUrl?: string | null;
+}
+
+export type MarketCandidate = YuyuteiMarketCandidate | SnkrdunkMarketCandidate;

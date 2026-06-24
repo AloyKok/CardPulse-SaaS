@@ -8,6 +8,9 @@ import type {
   MarketSource,
   MemberRole,
   PaymentMethod,
+  BuybackStatus,
+  BuybackProcessingStatus,
+  ShowExpenseCategory,
   SealedProductType,
   TransactionStatus
 } from './domain';
@@ -164,10 +167,78 @@ export interface Database {
         Update: never;
         Relationships: [];
       };
+      buybacks: {
+        Row: {
+          id: string;
+          org_id: string;
+          created_at: string;
+          created_by: string;
+          event_id: string | null;
+          seller_name: string | null;
+          item_summary: string;
+          item_count: number;
+          total_paid: number;
+          payment_method: PaymentMethod;
+          status: BuybackStatus;
+          processing_status: BuybackProcessingStatus;
+          processed_at: string | null;
+          notes: string | null;
+          voided_at: string | null;
+          voided_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          org_id: string;
+          created_at?: string;
+          created_by: string;
+          event_id?: string | null;
+          seller_name?: string | null;
+          item_summary: string;
+          item_count?: number;
+          total_paid: number;
+          payment_method?: PaymentMethod;
+          status?: BuybackStatus;
+          processing_status?: BuybackProcessingStatus;
+          processed_at?: string | null;
+          notes?: string | null;
+          voided_at?: string | null;
+          voided_by?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['buybacks']['Row']>;
+        Relationships: [];
+      };
       show_events: {
         Row: { id: string; org_id: string; name: string; start_date: string; end_date: string; location: string | null; created_at: string };
         Insert: { id?: string; org_id: string; name: string; start_date: string; end_date: string; location?: string | null; created_at?: string };
         Update: { id?: string; org_id?: string; name?: string; start_date?: string; end_date?: string; location?: string | null; created_at?: string };
+        Relationships: [];
+      };
+      show_expenses: {
+        Row: {
+          id: string;
+          org_id: string;
+          event_id: string;
+          created_at: string;
+          created_by: string;
+          category: ShowExpenseCategory;
+          description: string;
+          amount: number;
+          payment_method: PaymentMethod;
+          notes: string | null;
+        };
+        Insert: {
+          id?: string;
+          org_id: string;
+          event_id: string;
+          created_at?: string;
+          created_by: string;
+          category?: ShowExpenseCategory;
+          description: string;
+          amount: number;
+          payment_method?: PaymentMethod;
+          notes?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['show_expenses']['Row']>;
         Relationships: [];
       };
       settings: {
@@ -286,6 +357,11 @@ export interface Database {
         Args: { p_org_id: string; p_item_type: InventoryItemType; p_reference: string; p_condition: string };
         Returns: string;
       };
+      update_transaction_sale_source: {
+        Args: { p_org_id: string; p_transaction_id: string; p_event_id?: string | null };
+        Returns: Database['public']['Tables']['transactions']['Row'];
+      };
+      unvoid_sale: { Args: { p_org_id: string; p_transaction_id: string }; Returns: Database['public']['Tables']['transactions']['Row'] };
       void_sale: { Args: { p_org_id: string; p_transaction_id: string }; Returns: Database['public']['Tables']['transactions']['Row'] };
     };
     Enums: {
@@ -299,6 +375,9 @@ export interface Database {
       inventory_status: InventoryStatus;
       payment_method: PaymentMethod;
       transaction_status: TransactionStatus;
+      buyback_status: BuybackStatus;
+      buyback_processing_status: BuybackProcessingStatus;
+      show_expense_category: ShowExpenseCategory;
       invite_status: 'pending' | 'accepted' | 'revoked';
     };
     CompositeTypes: Record<string, never>;

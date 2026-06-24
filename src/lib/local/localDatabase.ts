@@ -1,4 +1,5 @@
 import type {
+  Buyback,
   InventoryFilters,
   InventoryItem,
   InventoryItemType,
@@ -7,6 +8,7 @@ import type {
   QueuedSale,
   Settings,
   ShowEvent,
+  ShowExpense,
   Transaction
 } from '../../types/domain';
 import type { InventoryInput } from '../supabase/api';
@@ -33,6 +35,8 @@ interface LocalDatabase {
   inventory: InventoryItem[];
   transactions: Transaction[];
   events: ShowEvent[];
+  buybacks: Buyback[];
+  showExpenses: ShowExpense[];
   settings: Settings;
   invitations: LocalInvitation[];
 }
@@ -103,6 +107,24 @@ export function getLocalDatabase(): LocalDatabase {
           grossProfit: legacyTransaction.grossProfit ?? 0,
           costUnknown: legacyTransaction.costUnknown ?? true
         };
+      });
+      parsed.transactions.forEach((transaction) => {
+        if (applyEstimatedMissingCosts(transaction)) migrated = true;
+      });
+      if (!Array.isArray(parsed.buybacks)) {
+        parsed.buybacks = [];
+        migrated = true;
+      }
+      if (!Array.isArray(parsed.showExpenses)) {
+        parsed.showExpenses = [];
+        migrated = true;
+      }
+      parsed.buybacks.forEach((buyback) => {
+        if (!buyback.processingStatus) {
+          buyback.processingStatus = 'unprocessed';
+          buyback.processedAt = null;
+          migrated = true;
+        }
       });
       if (!parsed.settings.currencySymbol) {
         parsed.settings.currencySymbol = 'S$';
@@ -295,7 +317,7 @@ export function completeLocalSale(payload: Omit<QueuedSale, 'id' | 'createdAt' |
   });
 
   const inventoryLineItems = requested.map(({ item, quantity }) => {
-    const unitCost = item.costBasis || 0;
+    const unitCost = item.costBasis ?? estimateMissingCost(item.askingPrice);
     const lineTotal = item.askingPrice * quantity;
     return {
       inventoryItemId: item.id,
@@ -312,7 +334,7 @@ export function completeLocalSale(payload: Omit<QueuedSale, 'id' | 'createdAt' |
       unitCost,
       lineTotal,
       lineProfit: (item.askingPrice - unitCost) * quantity,
-      costUnknown: item.costBasis == null
+      costUnknown: false
     };
   });
   const miscLineItems = payload.cart
@@ -320,6 +342,7 @@ export function completeLocalSale(payload: Omit<QueuedSale, 'id' | 'createdAt' |
     .map((line) => {
       const quantity = Math.max(1, Number(line.quantity) || 1);
       const unitPrice = Math.max(0, Number(line.unitPrice) || 0);
+      const unitCost = estimateMissingCost(unitPrice);
       return {
         inventoryItemId: null,
         itemNameSnapshot: line.name?.trim() || 'Others',
@@ -332,10 +355,10 @@ export function completeLocalSale(payload: Omit<QueuedSale, 'id' | 'createdAt' |
         conditionSnapshot: 'N/A',
         quantity,
         unitPrice,
-        unitCost: 0,
+        unitCost,
         lineTotal: unitPrice * quantity,
-        lineProfit: 0,
-        costUnknown: true
+        lineProfit: (unitPrice - unitCost) * quantity,
+        costUnknown: false
       };
     });
   const lineItems = [...inventoryLineItems, ...miscLineItems];
@@ -379,6 +402,101 @@ export function getLocalTransactions(limit = 100) {
   return getLocalDatabase().transactions.slice(0, limit);
 }
 
+export function getLocalBuybacks(limit = 1000) {
+  return [...getLocalDatabase().buybacks]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, limit);
+}
+
+export interface LocalBuybackInput {
+  eventId?: string | null;
+  sellerName?: string | null;
+  itemSummary: string;
+  itemCount: number;
+  totalPaid: number;
+  paymentMethod: Buyback['paymentMethod'];
+  notes?: string | null;
+}
+
+export function saveLocalBuyback(input: LocalBuybackInput) {
+  const db = getLocalDatabase();
+  const clean = normalizeBuybackInput(input, db.events);
+  const now = new Date().toISOString();
+  const buyback: Buyback = {
+    id: crypto.randomUUID(),
+    orgId: LOCAL_ORG_ID,
+    createdAt: now,
+    createdBy: LOCAL_USER_ID,
+    ...clean,
+    status: 'completed',
+    processingStatus: 'unprocessed',
+    processedAt: null,
+    voidedAt: null,
+    voidedBy: null
+  };
+  db.buybacks.unshift(buyback);
+  writeDatabase(db);
+  return buyback;
+}
+
+export function updateLocalBuyback(id: string, input: LocalBuybackInput) {
+  const db = getLocalDatabase();
+  const buyback = db.buybacks.find((candidate) => candidate.id === id);
+  if (!buyback) throw new Error('Buyback not found');
+  const clean = normalizeBuybackInput(input, db.events);
+  Object.assign(buyback, clean);
+  writeDatabase(db);
+  return buyback;
+}
+
+export function deleteLocalBuyback(id: string) {
+  const db = getLocalDatabase();
+  db.buybacks = db.buybacks.filter((buyback) => buyback.id !== id);
+  writeDatabase(db);
+}
+
+export function updateLocalBuybackSource(id: string, eventId: string | null) {
+  const db = getLocalDatabase();
+  const buyback = db.buybacks.find((candidate) => candidate.id === id);
+  if (!buyback) throw new Error('Buyback not found');
+  if (eventId && !db.events.some((event) => event.id === eventId)) throw new Error('Show event not found');
+  buyback.eventId = eventId;
+  writeDatabase(db);
+  return buyback;
+}
+
+export function updateLocalBuybackProcessingStatus(id: string, processingStatus: Buyback['processingStatus']) {
+  const db = getLocalDatabase();
+  const buyback = db.buybacks.find((candidate) => candidate.id === id);
+  if (!buyback) throw new Error('Buyback not found');
+  buyback.processingStatus = processingStatus;
+  buyback.processedAt = processingStatus === 'processed' ? new Date().toISOString() : null;
+  writeDatabase(db);
+  return buyback;
+}
+
+export function voidLocalBuyback(id: string) {
+  const db = getLocalDatabase();
+  const buyback = db.buybacks.find((candidate) => candidate.id === id);
+  if (!buyback) throw new Error('Buyback not found');
+  buyback.status = 'voided';
+  buyback.voidedAt = new Date().toISOString();
+  buyback.voidedBy = LOCAL_USER_ID;
+  writeDatabase(db);
+  return buyback;
+}
+
+export function unvoidLocalBuyback(id: string) {
+  const db = getLocalDatabase();
+  const buyback = db.buybacks.find((candidate) => candidate.id === id);
+  if (!buyback) throw new Error('Buyback not found');
+  buyback.status = 'completed';
+  buyback.voidedAt = null;
+  buyback.voidedBy = null;
+  writeDatabase(db);
+  return buyback;
+}
+
 export function voidLocalSale(transactionId: string) {
   const db = getLocalDatabase();
   const transaction = db.transactions.find((candidate) => candidate.id === transactionId);
@@ -400,8 +518,93 @@ export function voidLocalSale(transactionId: string) {
   return transaction;
 }
 
+export function updateLocalTransactionSaleSource(transactionId: string, eventId: string | null) {
+  const db = getLocalDatabase();
+  const transaction = db.transactions.find((candidate) => candidate.id === transactionId);
+  if (!transaction) throw new Error('Transaction not found');
+  if (eventId && !db.events.some((event) => event.id === eventId)) throw new Error('Show event not found');
+  transaction.eventId = eventId;
+  writeDatabase(db);
+  return transaction;
+}
+
+export function unvoidLocalSale(transactionId: string) {
+  const db = getLocalDatabase();
+  const transaction = db.transactions.find((candidate) => candidate.id === transactionId);
+  if (!transaction) throw new Error('Transaction not found');
+  if (transaction.status === 'completed') return transaction;
+
+  for (const line of transaction.lineItems) {
+    if (!line.inventoryItemId) continue;
+    const item = db.inventory.find((candidate) => candidate.id === line.inventoryItemId);
+    if (!item || item.status === 'reserved' || item.quantity < line.quantity) {
+      throw new Error(`Insufficient stock to revert void for ${line.itemNameSnapshot}`);
+    }
+  }
+
+  for (const line of transaction.lineItems) {
+    if (!line.inventoryItemId) continue;
+    const item = db.inventory.find((candidate) => candidate.id === line.inventoryItemId);
+    if (!item) continue;
+    item.quantity -= line.quantity;
+    item.status = item.quantity === 0 ? 'sold_out' : 'in_stock';
+    item.updatedAt = new Date().toISOString();
+  }
+
+  transaction.status = 'completed';
+  transaction.voidedAt = null;
+  transaction.voidedBy = null;
+  writeDatabase(db);
+  return transaction;
+}
+
 export function getLocalEvents() {
   return [...getLocalDatabase().events].sort((a, b) => b.startDate.localeCompare(a.startDate));
+}
+
+export function getLocalShowExpenses(eventId?: string) {
+  const rows = [...getLocalDatabase().showExpenses].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return eventId ? rows.filter((expense) => expense.eventId === eventId) : rows;
+}
+
+export interface LocalShowExpenseInput {
+  eventId: string;
+  category: ShowExpense['category'];
+  description: string;
+  amount: number;
+  paymentMethod: ShowExpense['paymentMethod'];
+  notes?: string | null;
+}
+
+export function saveLocalShowExpense(input: LocalShowExpenseInput) {
+  const db = getLocalDatabase();
+  const event = db.events.find((candidate) => candidate.id === input.eventId);
+  if (!event) throw new Error('Show event not found');
+  const description = input.description.trim();
+  if (!description) throw new Error('Description is required');
+  const amount = Math.max(0, Number(input.amount) || 0);
+  if (amount <= 0) throw new Error('Amount must be more than 0');
+  const expense: ShowExpense = {
+    id: crypto.randomUUID(),
+    orgId: LOCAL_ORG_ID,
+    eventId: input.eventId,
+    createdAt: new Date().toISOString(),
+    createdBy: LOCAL_USER_ID,
+    category: input.category,
+    description,
+    amount,
+    paymentMethod: input.paymentMethod,
+    notes: input.notes?.trim() || null
+  };
+  db.showExpenses.unshift(expense);
+  writeDatabase(db);
+  return expense;
+}
+
+export function deleteLocalShowExpense(id: string) {
+  const db = getLocalDatabase();
+  db.showExpenses = db.showExpenses.filter((expense) => expense.id !== id);
+  writeDatabase(db);
 }
 
 export function saveLocalEvent(event: Pick<ShowEvent, 'name' | 'startDate' | 'endDate' | 'location'>, id?: string) {
@@ -477,7 +680,7 @@ function normalizeInput(input: InventoryInput) {
     art: isCard ? input.art || 'Base' : null,
     language: input.language,
     category: isCard ? input.category || 'Character' : null,
-    condition: input.condition.trim() || (isSealed ? 'SEALED' : input.itemType === 'mystery_pack' ? 'NEW' : 'NM'),
+    condition: input.condition.trim() || (isSealed ? 'SEALED' : input.itemType === 'mystery_pack' ? 'NEW' : 'MINT'),
     gradeCompany: isCard && input.condition === 'GRADED' ? input.gradeCompany?.trim() || null : null,
     grade: isCard && input.condition === 'GRADED' ? input.grade?.trim() || null : null,
     certNumber: isCard && input.condition === 'GRADED' ? input.certNumber?.trim() || null : null,
@@ -558,12 +761,14 @@ function createSeedDatabase(): LocalDatabase {
     inventory,
     transactions: [],
     events: [event],
+    buybacks: [],
+    showExpenses: [],
     settings: {
       orgId: LOCAL_ORG_ID,
       currency: 'USD',
       currencySymbol: 'S$',
-      defaultCondition: 'NM',
-      defaultLanguage: 'EN',
+      defaultCondition: 'MINT',
+      defaultLanguage: 'JP',
       activeEventId: event.id,
       pricingApiKey: null,
       labelSheetPreset: '30-up-avery-5160',
@@ -664,4 +869,45 @@ function addInventoryDefaults(item: InventoryItem) {
     changed = true;
   }
   return changed;
+}
+
+function normalizeBuybackInput(input: LocalBuybackInput, events: ShowEvent[]) {
+  const itemSummary = input.itemSummary.trim();
+  if (!itemSummary) throw new Error('Item summary is required');
+  const eventId = input.eventId || null;
+  if (eventId && !events.some((event) => event.id === eventId)) throw new Error('Show event not found');
+  return {
+    eventId,
+    sellerName: input.sellerName?.trim() || null,
+    itemSummary,
+    itemCount: Math.max(1, Math.floor(Number(input.itemCount) || 1)),
+    totalPaid: Math.max(0, Number(input.totalPaid) || 0),
+    paymentMethod: input.paymentMethod,
+    notes: input.notes?.trim() || null
+  };
+}
+
+function estimateMissingCost(unitPrice: number) {
+  return Math.round(Math.max(0, Number(unitPrice) || 0) * 20) / 100;
+}
+
+function applyEstimatedMissingCosts(transaction: Transaction) {
+  let changed = false;
+  transaction.lineItems = transaction.lineItems.map((line) => {
+    if (!line.costUnknown) return line;
+    const unitCost = estimateMissingCost(line.unitPrice);
+    changed = true;
+    return {
+      ...line,
+      unitCost,
+      lineProfit: (line.unitPrice - unitCost) * line.quantity,
+      costUnknown: false
+    };
+  });
+  if (!changed) return false;
+
+  transaction.costTotal = transaction.lineItems.reduce((sum, line) => sum + line.unitCost * line.quantity, 0);
+  transaction.grossProfit = transaction.total - transaction.costTotal;
+  transaction.costUnknown = transaction.lineItems.some((line) => Boolean(line.costUnknown));
+  return true;
 }

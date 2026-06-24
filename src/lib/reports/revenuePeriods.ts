@@ -1,4 +1,4 @@
-import type { ShowEvent, Transaction } from '../../types/domain';
+import type { ShowEvent } from '../../types/domain';
 
 export type SaleMode = 'daily' | 'show';
 
@@ -13,7 +13,7 @@ export function getLocalMonthKey(value: string | Date = new Date()) {
 }
 
 export function getRevenueMonth(
-  transaction: Pick<Transaction, 'createdAt' | 'eventId'>,
+  transaction: { createdAt: string; eventId?: string | null },
   eventsById: ReadonlyMap<string, Pick<ShowEvent, 'startDate'>>
 ) {
   if (transaction.eventId) {
@@ -30,7 +30,7 @@ export function formatMonthLabel(month: string) {
     .format(new Date(year, monthNumber - 1, 1));
 }
 
-export function matchesSaleScope(transaction: Pick<Transaction, 'eventId'>, scope: string) {
+export function matchesSaleScope(transaction: { eventId?: string | null }, scope: string) {
   if (!scope) return true;
   if (scope === 'daily') return !transaction.eventId;
   if (scope === 'shows') return Boolean(transaction.eventId);

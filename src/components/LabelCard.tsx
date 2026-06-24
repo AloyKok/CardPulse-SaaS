@@ -89,12 +89,12 @@ export function LabelCard({ item, currencySymbol }: { item: InventoryItem; curre
   };
 
   return (
-    <div className="label-card break-inside-avoid border border-slate-400 bg-white p-2 text-[10px] leading-tight text-black">
+    <div className="label-card min-w-0 max-w-full break-inside-avoid border border-slate-400 bg-white p-2 text-[10px] leading-tight text-black">
       <div className="flex gap-2">
-        {src ? <img src={src} alt={`QR ${item.itemNumber}`} className="h-16 w-16" /> : <div className="h-16 w-16 bg-slate-100" />}
+        {src ? <img src={src} alt={`QR ${item.itemNumber}`} className="h-16 w-16 shrink-0" /> : <div className="h-16 w-16 shrink-0 bg-slate-100" />}
         <div className="min-w-0 flex-1">
           <p className="break-all font-bold">{item.itemNumber}</p>
-          <p className="truncate font-semibold">{item.itemName}</p>
+          <p className="break-words font-semibold print:truncate">{item.itemName}</p>
           {item.itemType === 'single_card' ? (
             <>
               <p>{item.cardNumber} / {item.rarity} / {item.language}</p>

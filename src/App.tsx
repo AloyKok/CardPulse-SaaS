@@ -1,33 +1,37 @@
 import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { lazy, Suspense, useState } from 'react';
 import { AppShell } from './components/AppShell';
 import { useAuth } from './lib/supabase/AuthProvider';
 import { OrgProvider, useMembershipsQuery } from './lib/org/OrgProvider';
 import { acceptInvite, bootstrapOwnerOrg } from './lib/supabase/api';
-import { AuthScreen } from './screens/AuthScreen';
-import { SellScreen } from './screens/SellScreen';
-import { InventoryScreen } from './screens/InventoryScreen';
-import { DashboardScreen } from './screens/DashboardScreen';
-import { HistoryScreen } from './screens/HistoryScreen';
-import { MoreScreen } from './screens/MoreScreen';
-import { LabelsScreen } from './screens/LabelsScreen';
-import { ImportExportScreen } from './screens/ImportExportScreen';
-import { SettingsScreen } from './screens/SettingsScreen';
-import { UsersScreen } from './screens/UsersScreen';
-import { EventsScreen } from './screens/EventsScreen';
-import { MarketScreen } from './screens/MarketScreen';
 import { Button } from './components/Button';
 import { Field, TextInput } from './components/Field';
-import { useState } from 'react';
+
+const AuthScreen = lazy(() => import('./screens/AuthScreen').then((module) => ({ default: module.AuthScreen })));
+const SellScreen = lazy(() => import('./screens/SellScreen').then((module) => ({ default: module.SellScreen })));
+const InventoryScreen = lazy(() => import('./screens/InventoryScreen').then((module) => ({ default: module.InventoryScreen })));
+const DashboardScreen = lazy(() => import('./screens/DashboardScreen').then((module) => ({ default: module.DashboardScreen })));
+const HistoryScreen = lazy(() => import('./screens/HistoryScreen').then((module) => ({ default: module.HistoryScreen })));
+const MoreScreen = lazy(() => import('./screens/MoreScreen').then((module) => ({ default: module.MoreScreen })));
+const LabelsScreen = lazy(() => import('./screens/LabelsScreen').then((module) => ({ default: module.LabelsScreen })));
+const ImportExportScreen = lazy(() => import('./screens/ImportExportScreen').then((module) => ({ default: module.ImportExportScreen })));
+const SettingsScreen = lazy(() => import('./screens/SettingsScreen').then((module) => ({ default: module.SettingsScreen })));
+const UsersScreen = lazy(() => import('./screens/UsersScreen').then((module) => ({ default: module.UsersScreen })));
+const EventsScreen = lazy(() => import('./screens/EventsScreen').then((module) => ({ default: module.EventsScreen })));
+const MarketScreen = lazy(() => import('./screens/MarketScreen').then((module) => ({ default: module.MarketScreen })));
+const BuybacksScreen = lazy(() => import('./screens/BuybacksScreen').then((module) => ({ default: module.BuybacksScreen })));
 
 export function App() {
   return (
     <BrowserRouter basename="/admin">
-      <Routes>
-        <Route path="/auth" element={<AuthScreen />} />
-        <Route path="/accept/:token" element={<AcceptInviteScreen />} />
-        <Route path="/*" element={<ProtectedApp />} />
-      </Routes>
+      <Suspense fallback={<FullScreenMessage message="Loading screen..." />}>
+        <Routes>
+          <Route path="/auth" element={<AuthScreen />} />
+          <Route path="/accept/:token" element={<AcceptInviteScreen />} />
+          <Route path="/*" element={<ProtectedApp />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }
@@ -54,8 +58,10 @@ function ProtectedApp() {
           <Route path="import-export" element={<ImportExportScreen />} />
           <Route path="settings" element={<SettingsScreen />} />
           <Route path="users" element={<UsersScreen />} />
-          <Route path="events" element={<EventsScreen />} />
+          <Route path="show" element={<EventsScreen />} />
+          <Route path="events" element={<Navigate to="/show" replace />} />
           <Route path="market" element={<MarketScreen />} />
+          <Route path="buybacks" element={<BuybacksScreen />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
@@ -72,8 +78,8 @@ function CreateOrgScreen() {
   });
 
   return (
-    <div className="grid min-h-dvh place-items-center bg-slate-50 p-4">
-      <div className="w-full max-w-sm rounded-lg border border-line bg-white p-5 shadow-soft">
+    <div className="grid min-h-dvh place-items-center bg-[#f3f6f8] p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-line bg-white p-6 shadow-soft">
         <h1 className="text-xl font-bold">Create organization</h1>
         <p className="mt-1 text-sm text-slate-600">This creates the seller workspace and makes you the owner.</p>
         <form
@@ -110,8 +116,8 @@ function AcceptInviteScreen() {
   if (!user && !loading) return <Navigate to={`/auth?next=/accept/${token}`} replace />;
 
   return (
-    <div className="grid min-h-dvh place-items-center bg-slate-50 p-4">
-      <div className="w-full max-w-sm rounded-lg border border-line bg-white p-5 shadow-soft">
+    <div className="grid min-h-dvh place-items-center bg-[#f3f6f8] p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-line bg-white p-6 shadow-soft">
         <h1 className="text-xl font-bold">Accept invite</h1>
         <p className="mt-1 text-sm text-slate-600">Use the same email address the owner invited.</p>
         {mutation.error && <p className="mt-4 text-sm text-danger">{mutation.error.message}</p>}
@@ -124,5 +130,5 @@ function AcceptInviteScreen() {
 }
 
 function FullScreenMessage({ message }: { message: string }) {
-  return <div className="grid min-h-dvh place-items-center bg-slate-50 p-6 text-slate-700">{message}</div>;
+  return <div className="grid min-h-dvh place-items-center bg-[#f3f6f8] p-6 text-sm font-black uppercase tracking-wide text-slate-600">{message}</div>;
 }

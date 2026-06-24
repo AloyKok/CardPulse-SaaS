@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, Printer, RefreshCcw, TrendingDown, TrendingUp } from 'lucide-react';
+import { AlertTriangle, HandCoins, Printer, RefreshCcw, TrendingDown, TrendingUp } from 'lucide-react';
 import { Field, SelectInput, TextInput } from '../components/Field';
+import { PageHeader, Surface } from '../components/Page';
 import { formatMoney, formatPercent } from '../lib/format/money';
+import { lineFinalProfit, lineFinalTotal } from '../lib/reports/profit';
 import { getLocalDateKey, getLocalMonthKey, getRevenueMonth } from '../lib/reports/revenuePeriods';
 import { getQueuedSales } from '../lib/queue/offlineQueue';
-import { getSettings, listEvents, listInventory, listTransactions } from '../lib/supabase/api';
+import { getSettings, listBuybacks, listEvents, listInventory, listMarketPriceSnapshots, listTransactions } from '../lib/supabase/api';
 import { useMembershipsQuery, useOrg } from '../lib/org/OrgProvider';
-import type { InventoryItem, ShowEvent, Transaction } from '../types/domain';
+import type { Buyback, InventoryItem, MarketPriceSnapshot, Settings, ShowEvent, Transaction } from '../types/domain';
 
 type TimePeriod = 'today' | 'show' | 'month' | 'custom';
 type ChannelFilter = 'all' | 'walk-in' | 'show';
@@ -21,7 +23,9 @@ export function DashboardScreen() {
   const [customStart, setCustomStart] = useState(getLocalDateKey());
   const [customEnd, setCustomEnd] = useState(getLocalDateKey());
   const inventoryQuery = useQuery({ queryKey: ['inventory', organization.id, 'dashboard'], queryFn: () => listInventory(organization.id) });
+  const marketSnapshotsQuery = useQuery({ queryKey: ['market-snapshots', organization.id, 'dashboard'], queryFn: () => listMarketPriceSnapshots(organization.id) });
   const salesQuery = useQuery({ queryKey: ['history', organization.id], queryFn: () => listTransactions(organization.id, 5000) });
+  const buybacksQuery = useQuery({ queryKey: ['buybacks', organization.id], queryFn: () => listBuybacks(organization.id, 5000) });
   const eventsQuery = useQuery({ queryKey: ['events', organization.id], queryFn: () => listEvents(organization.id) });
   const settingsQuery = useQuery({ queryKey: ['settings', organization.id], queryFn: () => getSettings(organization.id) });
   const queueQuery = useQuery({ queryKey: ['pending-sales'], queryFn: getQueuedSales, refetchInterval: 15000 });
@@ -29,6 +33,7 @@ export function DashboardScreen() {
 
   const inventory = useMemo(() => inventoryQuery.data || [], [inventoryQuery.data]);
   const transactions = useMemo(() => salesQuery.data || [], [salesQuery.data]);
+  const buybacks = useMemo(() => buybacksQuery.data || [], [buybacksQuery.data]);
   const events = useMemo(() => eventsQuery.data || [], [eventsQuery.data]);
   const settings = settingsQuery.data;
   const symbol = settings?.currencySymbol || 'S$';
@@ -54,28 +59,37 @@ export function DashboardScreen() {
   );
   const metrics = useMemo(() => summarizeSales(currentSales), [currentSales]);
   const priorMetrics = useMemo(() => summarizeSales(priorSales), [priorSales]);
+  const currentBuybacks = useMemo(
+    () => filterBuybacks(buybacks, eventsById, period, channel, adminId),
+    [adminId, buybacks, channel, eventsById, period]
+  );
+  const buybackMetrics = useMemo(() => summarizeBuybacks(currentBuybacks), [currentBuybacks]);
   const inventoryHealth = useMemo(() => summarizeInventory(inventory, agingDays), [agingDays, inventory]);
+  const pricingHealth = useMemo(
+    () => summarizePricingHealth(inventory, marketSnapshotsQuery.data || [], settings),
+    [inventory, marketSnapshotsQuery.data, settings]
+  );
   const monthlyTrend = useMemo(
     () => buildMonthlyTrend(transactions, eventsById, channel, adminId),
     [adminId, channel, eventsById, transactions]
   );
   const performanceRows = useMemo(
-    () => buildPerformanceRows(currentSales, eventsById),
-    [currentSales, eventsById]
+    () => buildPerformanceRows(currentSales, currentBuybacks, eventsById),
+    [currentBuybacks, currentSales, eventsById]
   );
   const topSellers = useMemo(() => buildTopSellers(currentSales), [currentSales]);
   const needsAttention = useMemo(
-    () => buildAttentionItems(inventory, events, agingDays, queueQuery.data || []),
-    [agingDays, events, inventory, queueQuery.data]
+    () => buildAttentionItems(inventory, events, agingDays, queueQuery.data || [], pricingHealth, buybacks),
+    [agingDays, buybacks, events, inventory, pricingHealth, queueQuery.data]
   );
 
   return (
     <div className="grid gap-4">
-      <div className="grid gap-3">
-        <div>
-          <h2 className="text-2xl font-black">Dashboard</h2>
-          <p className="text-sm font-semibold text-slate-600">{period.label} / {channelLabel(channel)}</p>
-        </div>
+      <PageHeader
+        eyebrow="Decision surface"
+        title="Dashboard"
+        description={`${period.label} / ${channelLabel(channel)} / ${metrics.salesCount} sales`}
+      >
         <div className="grid gap-2 md:grid-cols-3">
           <Field label="Time period">
             <SelectInput
@@ -120,15 +134,15 @@ export function DashboardScreen() {
             <Field label="End date"><TextInput type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></Field>
           </div>
         )}
-      </div>
+      </PageHeader>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <HeroMetric label="Revenue" value={formatMoney(metrics.revenue, symbol)} delta={compare(metrics.revenue, priorMetrics.revenue)} />
         <HeroMetric
           label="Gross profit"
-          value={metrics.costUnknown ? 'Cost unknown' : formatMoney(metrics.grossProfit, symbol)}
-          detail={metrics.costUnknown ? 'Historical sales need cost data' : `${formatPercent(metrics.margin)} margin`}
-          delta={metrics.costUnknown || priorMetrics.costUnknown ? null : compare(metrics.grossProfit, priorMetrics.grossProfit)}
+          value={formatMoney(metrics.grossProfit, symbol)}
+          detail={`${formatPercent(metrics.margin)} margin`}
+          delta={compare(metrics.grossProfit, priorMetrics.grossProfit)}
         />
         <HeroMetric
           label="Avg sale value"
@@ -143,10 +157,27 @@ export function DashboardScreen() {
         />
       </div>
 
-      <section className="rounded-lg border border-line bg-white p-4 shadow-sm">
+      <Surface>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-black">Buyback spend</h3>
+            <p className="text-sm text-slate-600">Cash out for collections, singles, bulk, and sealed items.</p>
+          </div>
+          <Link to="/buybacks" className="flex min-h-11 items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">
+            <HandCoins size={16} /> Record
+          </Link>
+        </div>
+        <div className="mt-4 grid gap-3 text-sm">
+          <HealthRow label="Buyback spend" value={formatMoney(buybackMetrics.spend, symbol)} />
+          <HealthRow label="Buyback records / items" value={`${buybackMetrics.count} / ${buybackMetrics.items}`} />
+          <HealthRow label="Net cash after buybacks" value={formatMoney(metrics.revenue - buybackMetrics.spend, symbol)} accent />
+        </div>
+      </Surface>
+
+      <Surface>
         <div className="flex items-start justify-between gap-3">
           <h3 className="text-lg font-black">Inventory health</h3>
-          <Link to="/inventory?aging=1" className="rounded-md bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">
+          <Link to="/inventory?aging=1" className="flex min-h-11 items-center rounded-md bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">
             {inventoryHealth.agingCount} aging
           </Link>
         </div>
@@ -160,9 +191,37 @@ export function DashboardScreen() {
           />
           <HealthRow label="Units / distinct cards" value={`${inventoryHealth.units} / ${inventoryHealth.distinctItems}`} />
         </div>
-      </section>
+      </Surface>
 
-      <section className="rounded-lg border border-line bg-white p-4 shadow-sm">
+      <Surface>
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="text-lg font-black">Market pricing</h3>
+          <span className="rounded-md bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700">±10% target</span>
+        </div>
+        <div className="mt-4 grid gap-3 text-sm">
+          <HealthRow label="Within range" value={`${pricingHealth.withinRangeCount} items`} />
+          <HealthRow
+            label="Priced too high"
+            value={`${pricingHealth.overpricedCount} / ${formatMoney(pricingHealth.overpricedAskPremium, symbol)} premium`}
+          />
+          <HealthRow
+            label="Priced too low"
+            value={`${pricingHealth.underpricedCount} / ${formatMoney(pricingHealth.underpricedRevenueGap, symbol)} gap`}
+            accent={pricingHealth.underpricedCount > 0}
+          />
+          <HealthRow label="Tracked / untracked" value={`${pricingHealth.trackedCount} / ${pricingHealth.untrackedCount}`} />
+        </div>
+        <div className="mt-3 grid gap-2 min-[420px]:grid-cols-2">
+          <Link to="/inventory?price=over" className="flex min-h-11 items-center rounded-md bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700">
+            Review high prices
+          </Link>
+          <Link to="/inventory?price=under" className="flex min-h-11 items-center rounded-md bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">
+            Review low prices
+          </Link>
+        </div>
+      </Surface>
+
+      <Surface>
         <h3 className="text-lg font-black">Revenue trend</h3>
         <div className="mt-4 grid h-56 grid-cols-6 items-end gap-2">
           {monthlyTrend.map((month) => (
@@ -184,10 +243,10 @@ export function DashboardScreen() {
             </div>
           ))}
         </div>
-        <p className="mt-2 text-xs font-semibold text-slate-500">Blue is revenue. Green is gross profit where cost is known.</p>
-      </section>
+        <p className="mt-2 text-xs font-semibold text-slate-500">Blue is revenue. Green is gross profit with blank costs estimated at 20%.</p>
+      </Surface>
 
-      <section className="rounded-lg border border-line bg-white p-4 shadow-sm">
+      <Surface>
         <h3 className="text-lg font-black">Performance by show / channel</h3>
         <div className="mt-3 grid gap-2">
           {performanceRows.length === 0 && <p className="text-sm text-slate-600">No completed sales for this filter.</p>}
@@ -198,14 +257,14 @@ export function DashboardScreen() {
                 <strong className="shrink-0">{formatMoney(row.revenue, symbol)}</strong>
               </div>
               <p className="text-xs font-semibold text-slate-600">
-                Profit {row.costUnknown ? 'cost unknown' : `${formatMoney(row.profit, symbol)} / ${formatPercent(row.margin)}`} / {row.count} sales
+                Profit {formatMoney(row.profit, symbol)} / {formatPercent(row.margin)} / {row.count} sales / Buybacks {formatMoney(row.buybackSpend, symbol)} / Net {formatMoney(row.revenue - row.buybackSpend, symbol)}
               </p>
             </div>
           ))}
         </div>
-      </section>
+      </Surface>
 
-      <section className="rounded-lg border border-line bg-white p-4 shadow-sm">
+      <Surface>
         <h3 className="text-lg font-black">Top sellers by profit</h3>
         <div className="mt-3 grid gap-2">
           {topSellers.length === 0 && <p className="text-sm text-slate-600">No line items for this filter.</p>}
@@ -215,13 +274,13 @@ export function DashboardScreen() {
                 <strong className="block break-words">{row.name}</strong>
                 <span className="block text-xs text-slate-600">{row.units} units / {formatMoney(row.revenue, symbol)} revenue</span>
               </span>
-              <strong>{row.costUnknown ? 'Unknown' : formatMoney(row.profit, symbol)}</strong>
+              <strong>{formatMoney(row.profit, symbol)}</strong>
             </div>
           ))}
         </div>
-      </section>
+      </Surface>
 
-      <section className="rounded-lg border border-line bg-white p-4 shadow-sm">
+      <Surface>
         <h3 className="text-lg font-black">Needs attention</h3>
         <div className="mt-3 grid gap-2">
           {needsAttention.map((item) => (
@@ -231,7 +290,7 @@ export function DashboardScreen() {
             </Link>
           ))}
         </div>
-      </section>
+      </Surface>
     </div>
   );
 }
@@ -309,10 +368,32 @@ function filterSales(
   });
 }
 
+function filterBuybacks(
+  buybacks: Buyback[],
+  eventsById: ReadonlyMap<string, ShowEvent>,
+  period: { start: string; end: string; kind: 'date' | 'month'; eventId?: string },
+  channel: ChannelFilter,
+  adminId: string
+) {
+  return buybacks.filter((buyback) => {
+    if (buyback.status !== 'completed') return false;
+    if (adminId && buyback.createdBy !== adminId) return false;
+    if (channel === 'walk-in' && buyback.eventId) return false;
+    if (channel === 'show' && !buyback.eventId) return false;
+    if (period.eventId && buyback.eventId !== period.eventId) return false;
+    if (period.kind === 'month' && buyback.eventId && !period.eventId) {
+      const revenueMonth = getRevenueMonth(buyback, eventsById);
+      return revenueMonth >= period.start.slice(0, 7) && revenueMonth <= period.end.slice(0, 7);
+    }
+    const buybackDate = getLocalDateKey(buyback.createdAt);
+    return buybackDate >= period.start && buybackDate <= period.end;
+  });
+}
+
 function summarizeSales(rows: Transaction[]) {
   const revenue = rows.reduce((sum, tx) => sum + tx.total, 0);
   const costUnknown = rows.some((tx) => tx.costUnknown);
-  const grossProfit = costUnknown ? 0 : rows.reduce((sum, tx) => sum + tx.grossProfit, 0);
+  const grossProfit = rows.reduce((sum, tx) => sum + tx.grossProfit, 0);
   const unitsSold = rows.reduce((sum, tx) => sum + tx.lineItems.reduce((lineSum, line) => lineSum + line.quantity, 0), 0);
   const cashTotal = rows.filter((tx) => tx.paymentMethod === 'cash').reduce((sum, tx) => sum + tx.total, 0);
   const cardTotal = rows.filter((tx) => tx.paymentMethod === 'card').reduce((sum, tx) => sum + tx.total, 0);
@@ -331,8 +412,16 @@ function summarizeSales(rows: Transaction[]) {
   };
 }
 
+function summarizeBuybacks(rows: Buyback[]) {
+  return {
+    spend: rows.reduce((sum, buyback) => sum + buyback.totalPaid, 0),
+    count: rows.length,
+    items: rows.reduce((sum, buyback) => sum + buyback.itemCount, 0)
+  };
+}
+
 function summarizeInventory(items: InventoryItem[], agingDays: number) {
-  const inStock = items.filter((item) => item.quantity > 0 && item.status === 'in_stock');
+  const inStock = items.filter((item) => item.itemType === 'single_card' && item.quantity > 0 && item.status === 'in_stock');
   const costValue = inStock.reduce((sum, item) => sum + item.quantity * (item.costBasis || 0), 0);
   const askValue = inStock.reduce((sum, item) => sum + item.quantity * item.askingPrice, 0);
   const cutoff = Date.now() - agingDays * 86400000;
@@ -345,6 +434,65 @@ function summarizeInventory(items: InventoryItem[], agingDays: number) {
     distinctItems: inStock.length,
     agingCount: inStock.filter((item) => new Date(item.createdAt).getTime() <= cutoff).length
   };
+}
+
+function summarizePricingHealth(items: InventoryItem[], snapshots: MarketPriceSnapshot[], settings?: Settings) {
+  const latestByItem = latestComparableMarketByItem(snapshots, settings);
+  const inStock = items.filter((item) => item.quantity > 0 && item.status === 'in_stock');
+  let trackedCount = 0;
+  let withinRangeCount = 0;
+  let overpricedCount = 0;
+  let underpricedCount = 0;
+  let overpricedAskPremium = 0;
+  let underpricedRevenueGap = 0;
+
+  inStock.forEach((item) => {
+    const market = latestByItem.get(item.id);
+    if (!market || market.price <= 0) return;
+    trackedCount += 1;
+    const low = market.price * 0.9;
+    const high = market.price * 1.1;
+    if (item.askingPrice > high) {
+      overpricedCount += 1;
+      overpricedAskPremium += (item.askingPrice - market.price) * item.quantity;
+      return;
+    }
+    if (item.askingPrice < low) {
+      underpricedCount += 1;
+      underpricedRevenueGap += (market.price - item.askingPrice) * item.quantity;
+      return;
+    }
+    withinRangeCount += 1;
+  });
+
+  return {
+    trackedCount,
+    untrackedCount: Math.max(0, inStock.length - trackedCount),
+    withinRangeCount,
+    overpricedCount,
+    underpricedCount,
+    overpricedAskPremium,
+    underpricedRevenueGap
+  };
+}
+
+function latestComparableMarketByItem(snapshots: MarketPriceSnapshot[], settings?: Settings) {
+  const currency = comparableMarketCurrency(settings);
+  const map = new Map<string, MarketPriceSnapshot>();
+  snapshots
+    .filter((snapshot) => snapshot.currency === currency)
+    .forEach((snapshot) => {
+      const existing = map.get(snapshot.inventoryItemId);
+      if (!existing || new Date(snapshot.fetchedAt).getTime() > new Date(existing.fetchedAt).getTime()) {
+        map.set(snapshot.inventoryItemId, snapshot);
+      }
+    });
+  return map;
+}
+
+function comparableMarketCurrency(settings?: Settings) {
+  if (settings?.currency?.toUpperCase() === 'SGD' || settings?.currencySymbol === 'S$') return 'SGD';
+  return settings?.currency?.toUpperCase() || 'SGD';
 }
 
 function buildMonthlyTrend(transactions: Transaction[], eventsById: ReadonlyMap<string, ShowEvent>, channel: ChannelFilter, adminId: string) {
@@ -362,7 +510,7 @@ function buildMonthlyTrend(transactions: Transaction[], eventsById: ReadonlyMap<
       (channel === 'all' || (channel === 'walk-in' ? !tx.eventId : Boolean(tx.eventId)))
     );
     const revenue = sales.reduce((sum, tx) => sum + tx.total, 0);
-    const profit = sales.some((tx) => tx.costUnknown) ? 0 : sales.reduce((sum, tx) => sum + tx.grossProfit, 0);
+    const profit = sales.reduce((sum, tx) => sum + tx.grossProfit, 0);
     return { month, revenue, profit };
   });
   const max = Math.max(1, ...values.map((row) => Math.max(row.revenue, row.profit)));
@@ -379,21 +527,28 @@ function buildMonthlyTrend(transactions: Transaction[], eventsById: ReadonlyMap<
   });
 }
 
-function buildPerformanceRows(rows: Transaction[], eventsById: ReadonlyMap<string, ShowEvent>) {
-  const map = new Map<string, { id: string; name: string; count: number; revenue: number; profit: number; costUnknown: boolean }>();
+function buildPerformanceRows(rows: Transaction[], buybacks: Buyback[], eventsById: ReadonlyMap<string, ShowEvent>) {
+  const map = new Map<string, { id: string; name: string; count: number; revenue: number; profit: number; buybackSpend: number; costUnknown: boolean }>();
   rows.forEach((tx) => {
     const id = tx.eventId || 'walk-in';
     const name = tx.eventId ? eventsById.get(tx.eventId)?.name || 'Unknown show' : 'Online sales';
-    const current = map.get(id) || { id, name, count: 0, revenue: 0, profit: 0, costUnknown: false };
+    const current = map.get(id) || { id, name, count: 0, revenue: 0, profit: 0, buybackSpend: 0, costUnknown: false };
     current.count += 1;
     current.revenue += tx.total;
-    current.profit += tx.costUnknown ? 0 : tx.grossProfit;
+    current.profit += tx.grossProfit;
     current.costUnknown = current.costUnknown || tx.costUnknown;
+    map.set(id, current);
+  });
+  buybacks.forEach((buyback) => {
+    const id = buyback.eventId || 'walk-in';
+    const name = buyback.eventId ? eventsById.get(buyback.eventId)?.name || 'Unknown show' : 'Online sales';
+    const current = map.get(id) || { id, name, count: 0, revenue: 0, profit: 0, buybackSpend: 0, costUnknown: false };
+    current.buybackSpend += buyback.totalPaid;
     map.set(id, current);
   });
   return [...map.values()]
     .map((row) => ({ ...row, margin: row.revenue > 0 ? row.profit / row.revenue * 100 : 0 }))
-    .sort((a, b) => b.revenue - a.revenue);
+    .sort((a, b) => (b.revenue - b.buybackSpend) - (a.revenue - a.buybackSpend));
 }
 
 function buildTopSellers(rows: Transaction[]) {
@@ -402,26 +557,35 @@ function buildTopSellers(rows: Transaction[]) {
     const id = line.inventoryItemId || `misc:${line.itemNameSnapshot}`;
     const current = map.get(id) || { id, name: line.itemNameSnapshot, units: 0, revenue: 0, profit: 0, costUnknown: false };
     current.units += line.quantity;
-    current.revenue += line.lineTotal;
-    current.profit += line.costUnknown ? 0 : line.lineProfit;
+    current.revenue += lineFinalTotal(tx, line);
+    current.profit += lineFinalProfit(tx, line);
     current.costUnknown = current.costUnknown || Boolean(line.costUnknown || tx.costUnknown);
     map.set(id, current);
   }));
   return [...map.values()].sort((a, b) => b.profit - a.profit).slice(0, 8);
 }
 
-function buildAttentionItems(items: InventoryItem[], events: ShowEvent[], agingDays: number, queued: unknown[]) {
+function buildAttentionItems(
+  items: InventoryItem[],
+  events: ShowEvent[],
+  agingDays: number,
+  queued: unknown[],
+  pricingHealth: ReturnType<typeof summarizePricingHealth>,
+  buybacks: Buyback[]
+) {
   const cutoff = Date.now() - agingDays * 86400000;
   const slowMovers = items.filter((item) => item.quantity > 0 && new Date(item.createdAt).getTime() <= cutoff).length;
-  const belowMarket = items.filter((item) => item.marketPrice != null && item.askingPrice < item.marketPrice).length;
   const missingFloor = items.filter((item) => item.quantity > 0 && !item.floorPrice).length;
+  const buybacksToProcess = buybacks.filter((buyback) => buyback.status === 'completed' && buyback.processingStatus !== 'processed').length;
   const upcoming = events
     .filter((event) => new Date(`${event.startDate}T00:00:00`).getTime() >= Date.now() - 86400000)
     .sort((a, b) => a.startDate.localeCompare(b.startDate))[0];
   return [
     { label: `${slowMovers} slow movers unsold ${agingDays}+ days / review for discounting`, to: '/inventory?aging=1', icon: <TrendingDown className="text-warn" size={18} /> },
     { label: upcoming ? `${upcoming.name} starts ${upcoming.startDate} / print labels and set floor prices` : `${missingFloor} items need floor prices before the next show`, to: '/labels', icon: <Printer className="text-sky-700" size={18} /> },
-    { label: `${belowMarket} cards priced below market / reprice to capture margin`, to: '/inventory?belowMarket=1', icon: <RefreshCcw className="text-slate-500" size={18} /> },
+    { label: `${pricingHealth.underpricedCount} cards priced 10%+ below market / reprice to capture margin`, to: '/inventory?price=under', icon: <RefreshCcw className="text-slate-500" size={18} /> },
+    { label: `${pricingHealth.overpricedCount} cards priced 10%+ above market / review before they stall`, to: '/inventory?price=over', icon: <AlertTriangle className="text-warn" size={18} /> },
+    { label: `${buybacksToProcess} buybacks still need inventory processing`, to: '/buybacks', icon: <HandCoins className={buybacksToProcess ? 'text-amber-700' : 'text-slate-400'} size={18} /> },
     { label: `${queued.length} pending offline sales to sync`, to: '/sell', icon: <AlertTriangle className={queued.length ? 'text-danger' : 'text-slate-400'} size={18} /> }
   ];
 }

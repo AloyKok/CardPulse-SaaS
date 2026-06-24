@@ -23,6 +23,9 @@ body {
   min-height: 100%;
   margin: 0;
   overflow-x: clip;
+  background:
+    radial-gradient(circle at top left, rgba(15, 118, 110, 0.08), transparent 28rem),
+    linear-gradient(180deg, #f8fafc 0%, #eef3f7 100%);
 }
 
 button,
@@ -51,6 +54,20 @@ svg,
 video,
 canvas {
   max-width: 100%;
+}
+
+::selection {
+  background: rgba(15, 118, 110, 0.16);
+}
+
+@layer components {
+  .cp-card {
+    @apply rounded-2xl border border-line bg-white p-4 shadow-sm sm:p-5;
+  }
+
+  .cp-chip {
+    @apply inline-flex min-h-8 items-center rounded-full border border-line bg-white px-3 text-xs font-black text-slate-600;
+  }
 }
 
 #root {

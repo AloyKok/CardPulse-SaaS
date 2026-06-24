@@ -1,5 +1,5 @@
 import type { Database } from '../../types/database';
-import type { InventoryItem, MarketMapping, MarketPriceSnapshot, Membership, Organization, Settings, ShowEvent, Transaction } from '../../types/domain';
+import type { Buyback, InventoryItem, MarketMapping, MarketPriceSnapshot, Membership, Organization, Settings, ShowEvent, ShowExpense, Transaction } from '../../types/domain';
 
 type Tables = Database['public']['Tables'];
 
@@ -84,6 +84,27 @@ export function mapTransaction(row: Tables['transactions']['Row']): Transaction 
   };
 }
 
+export function mapBuyback(row: Tables['buybacks']['Row']): Buyback {
+  return {
+    id: row.id,
+    orgId: row.org_id,
+    createdAt: row.created_at,
+    createdBy: row.created_by,
+    eventId: row.event_id,
+    sellerName: row.seller_name,
+    itemSummary: row.item_summary,
+    itemCount: row.item_count,
+    totalPaid: Number(row.total_paid),
+    paymentMethod: row.payment_method,
+    status: row.status,
+    processingStatus: row.processing_status,
+    processedAt: row.processed_at,
+    notes: row.notes,
+    voidedAt: row.voided_at,
+    voidedBy: row.voided_by
+  };
+}
+
 export function mapSettings(row: Tables['settings']['Row']): Settings {
   return {
     orgId: row.org_id,
@@ -106,6 +127,21 @@ export function mapShowEvent(row: Tables['show_events']['Row']): ShowEvent {
     startDate: row.start_date,
     endDate: row.end_date,
     location: row.location
+  };
+}
+
+export function mapShowExpense(row: Tables['show_expenses']['Row']): ShowExpense {
+  return {
+    id: row.id,
+    orgId: row.org_id,
+    eventId: row.event_id,
+    createdAt: row.created_at,
+    createdBy: row.created_by,
+    category: row.category,
+    description: row.description,
+    amount: Number(row.amount),
+    paymentMethod: row.payment_method,
+    notes: row.notes
   };
 }
 

@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { handleYuyuteiMarket } from './api/yuyuteiMarketCore';
+import { handleSnkrdunkMarket } from './api/snkrdunkMarketCore';
 import refreshYuyuteiMarketCron from './api/cron/refresh-yuyutei-market';
 
 export default defineConfig({
@@ -13,6 +14,33 @@ export default defineConfig({
     {
       name: 'cardpulse-yuyutei-local-api',
       configureServer(server) {
+        server.middlewares.use('/api/snkrdunk-market', async (request, response) => {
+          response.setHeader('Access-Control-Allow-Origin', '*');
+          response.setHeader('Access-Control-Allow-Headers', 'content-type');
+          response.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+          response.setHeader('Cache-Control', 'no-store');
+          if (request.method === 'OPTIONS') {
+            response.statusCode = 200;
+            response.end();
+            return;
+          }
+          if (request.method !== 'POST') {
+            response.statusCode = 405;
+            response.end(JSON.stringify({ error: 'method not allowed' }));
+            return;
+          }
+          try {
+            const body = await readJsonBody(request);
+            const result = await handleSnkrdunkMarket(body);
+            response.statusCode = result.status;
+            response.setHeader('content-type', 'application/json');
+            response.end(JSON.stringify(result.body));
+          } catch (error) {
+            response.statusCode = 500;
+            response.setHeader('content-type', 'application/json');
+            response.end(JSON.stringify({ error: error instanceof Error ? error.message : 'SNKRDUNK fetch failed' }));
+          }
+        });
         server.middlewares.use('/api/yuyutei-market', async (request, response) => {
           response.setHeader('Access-Control-Allow-Origin', '*');
           response.setHeader('Access-Control-Allow-Headers', 'content-type');

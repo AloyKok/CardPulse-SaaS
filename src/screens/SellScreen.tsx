@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { CalendarDays, CalendarRange, Minus, Plus, Search, ShoppingBag, Trash2 } from 'lucide-react';
+import { CalendarDays, CalendarRange, HandCoins, Minus, Plus, Search, ShoppingBag, Trash2 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Field, SelectInput, TextArea, TextInput } from '../components/Field';
+import { PageHeader, Surface } from '../components/Page';
 import { QrScanner } from '../components/QrScanner';
-import { formatEventPeriod } from '../lib/events/dateRange';
+import { formatShowEventOptionLabel, getShowEventTiming, sortShowEventOptions } from '../lib/events/dateRange';
 import { formatMoney } from '../lib/format/money';
 import { getCartSubtotal, lineIdFor, lineUnitPrice, useCartStore } from '../store/cartStore';
 import { completeSale, getSettings, listEvents, listInventory } from '../lib/supabase/api';
@@ -20,6 +21,9 @@ export function SellScreen() {
   const [manual, setManual] = useState('');
   const [miscName, setMiscName] = useState('Others');
   const [miscAmount, setMiscAmount] = useState('');
+  const [showMiscSale, setShowMiscSale] = useState(false);
+  const [finalTotalDraft, setFinalTotalDraft] = useState('');
+  const [editingFinalTotal, setEditingFinalTotal] = useState(false);
   const [flash, setFlash] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const cart = useCartStore();
   const cartEventId = cart.eventId;
@@ -56,6 +60,11 @@ export function SellScreen() {
   useEffect(() => {
     syncQueuedSales().then(() => queryClient.invalidateQueries({ queryKey: ['history', organization.id] })).catch(() => undefined);
   }, [organization.id, queryClient]);
+
+  useEffect(() => {
+    if (editingFinalTotal) return;
+    setFinalTotalDraft(formatEditableAmount(total));
+  }, [editingFinalTotal, total]);
 
   useEffect(() => {
     const loadedEvents = eventsQuery.data;
@@ -131,20 +140,28 @@ export function SellScreen() {
   });
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
+      <div className="lg:col-span-2">
+        <PageHeader
+          eyebrow="Checkout console"
+          title="Sell"
+          description={`${saleContextLabel} / ${cart.lines.length} cart lines / ${formatMoney(total, currencySymbol)} total`}
+          action={(
+            <Link to="/buybacks" className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-white px-4 text-sm font-black text-ink shadow-sm">
+              <HandCoins size={18} /> Buy
+            </Link>
+          )}
+        />
+      </div>
       <section className="grid gap-4">
-        <div>
-          <h2 className="text-2xl font-black">Sell</h2>
-          <p className="text-sm text-slate-600">Scan CardPulse labels or use manual lookup.</p>
-        </div>
-        <div className="grid gap-3 rounded-lg border border-line bg-white p-3 shadow-sm">
+        <Surface className="grid gap-3">
           <div>
-            <p className="text-sm font-bold text-slate-700">Sale tracking</p>
+            <p className="text-sm font-black text-slate-700">Sale tracking</p>
             <div className="mt-2 grid grid-cols-2 gap-2">
               <button
                 type="button"
                 aria-pressed={cart.saleMode === 'daily'}
-                className={`flex min-h-14 min-w-0 items-center justify-center gap-2 rounded-md border px-3 text-sm font-bold ${cart.saleMode === 'daily' ? 'border-action bg-emerald-50 text-action' : 'border-line bg-white text-slate-700'}`}
+                className={`flex min-h-14 min-w-0 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition ${cart.saleMode === 'daily' ? 'border-ink bg-ink text-white shadow-soft' : 'border-line bg-white text-slate-700 hover:bg-slate-50'}`}
                 onClick={() => changeSaleMode('daily')}
               >
                 <ShoppingBag className="shrink-0" size={19} /> Daily sales
@@ -152,7 +169,7 @@ export function SellScreen() {
               <button
                 type="button"
                 aria-pressed={cart.saleMode === 'show'}
-                className={`flex min-h-14 min-w-0 items-center justify-center gap-2 rounded-md border px-3 text-sm font-bold ${cart.saleMode === 'show' ? 'border-action bg-emerald-50 text-action' : 'border-line bg-white text-slate-700'}`}
+                className={`flex min-h-14 min-w-0 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-black transition ${cart.saleMode === 'show' ? 'border-ink bg-ink text-white shadow-soft' : 'border-line bg-white text-slate-700 hover:bg-slate-50'}`}
                 onClick={() => changeSaleMode('show')}
               >
                 <CalendarRange className="shrink-0" size={19} /> Card show
@@ -174,35 +191,41 @@ export function SellScreen() {
                   }}
                   options={[
                     { value: '', label: 'Select a show before selling' },
-                    ...events.map((event) => ({
+                    ...sortShowEventOptions(events).map((event) => ({
                       value: event.id,
-                      label: `${event.name} / ${formatEventPeriod(event)}${event.location ? ` / ${event.location}` : ''}`
+                      label: formatShowEventOptionLabel(event, { includeLocation: true }),
+                      muted: getShowEventTiming(event) === 'past'
                     }))
                   ]}
                 />
               </Field>
               {!eventsQuery.isLoading && events.length === 0 && (
-                <Link to="/events" className="flex min-h-11 items-center justify-center gap-2 rounded-md bg-action px-4 py-2 text-sm font-semibold text-white">
+                <Link to="/show" className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-ink px-4 py-2 text-sm font-black text-white">
                   <CalendarDays size={18} /> Create first show
                 </Link>
               )}
             </>
           )}
           {hasSaleContext && (
-            <p className="text-sm font-semibold text-action">
-              {cart.saleMode === 'daily'
-                ? 'Sales will be recorded as daily transactions.'
-                : `Sales will be recorded under ${selectedEvent?.name}.`}
-            </p>
+            <div className="grid gap-2">
+              <p className="text-sm font-semibold text-action">
+                {cart.saleMode === 'daily'
+                  ? 'Sales will be recorded as daily transactions.'
+                  : `Sales will be recorded under ${selectedEvent?.name}.`}
+              </p>
+              <Link to="/buybacks" className="flex min-h-11 items-center justify-center gap-2 rounded-md border border-line bg-white px-4 py-2 text-sm font-bold text-slate-700">
+                <HandCoins size={18} /> Buy in this context
+              </Link>
+            </div>
           )}
-        </div>
+        </Surface>
         {hasSaleContext ? (
           <>
             <QrScanner active onScan={addScannedItem} onError={setScannerError} />
             {scannerError && <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-900">{scannerError}</p>}
           </>
         ) : (
-          <div className="grid min-h-48 place-items-center rounded-lg border border-dashed border-line bg-slate-50 p-6 text-center">
+          <div className="grid min-h-48 place-items-center rounded-2xl border border-dashed border-line bg-white p-6 text-center shadow-sm">
             <div>
               <CalendarDays className="mx-auto text-slate-400" size={32} />
               <p className="mt-2 font-bold">Choose how to track this sale</p>
@@ -216,7 +239,7 @@ export function SellScreen() {
           </div>
         )}
         <form
-          className="rounded-lg border border-line bg-white p-3"
+          className="rounded-2xl border border-line bg-white p-4 shadow-sm"
           onSubmit={(event) => {
             event.preventDefault();
             if (!hasSaleContext) return;
@@ -240,49 +263,68 @@ export function SellScreen() {
           </Field>
           {hasSaleContext && <ManualResults items={inventory} query={manual} onAdd={addScannedItem} currencySymbol={currencySymbol} />}
         </form>
-        <form
-          className="grid gap-3 rounded-lg border border-line bg-white p-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!hasSaleContext) return;
-            const amount = Number(miscAmount);
-            if (!Number.isFinite(amount) || amount <= 0) {
-              showFeedback(setFlash, 'error', 'Enter a misc amount');
-              return;
-            }
-            cart.addMiscLine(miscName || 'Others', amount, 1);
-            setMiscName('Others');
-            setMiscAmount('');
-            showFeedback(setFlash, 'ok', `Added misc ${formatMoney(amount, currencySymbol)}`);
-          }}
-        >
-          <div>
-            <p className="text-sm font-bold text-slate-700">Misc sale</p>
-            <p className="mt-1 text-xs text-slate-500">For bulk commons or small items that are not logged in inventory.</p>
-          </div>
-          <div className="grid gap-2 min-[420px]:grid-cols-[minmax(0,1fr)_9rem_auto]">
-            <TextInput
-              value={miscName}
-              onChange={(event) => setMiscName(event.target.value)}
-              placeholder="Others"
+        <div className="grid gap-2">
+          {!showMiscSale ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="flex min-h-12 items-center justify-center gap-2"
               disabled={!hasSaleContext}
-            />
-            <TextInput
-              type="number"
-              min={0}
-              step="0.01"
-              value={miscAmount}
-              onChange={(event) => setMiscAmount(event.target.value)}
-              placeholder="Amount"
-              disabled={!hasSaleContext}
-            />
-            <Button type="submit" className="min-w-24" disabled={!hasSaleContext || !miscAmount}>Add</Button>
-          </div>
-        </form>
+              onClick={() => setShowMiscSale(true)}
+            >
+              <Plus size={18} /> Misc sale
+            </Button>
+          ) : (
+            <form
+              className="grid gap-3 rounded-2xl border border-line bg-white p-4 shadow-sm"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!hasSaleContext) return;
+                const amount = Number(miscAmount);
+                if (!Number.isFinite(amount) || amount <= 0) {
+                  showFeedback(setFlash, 'error', 'Enter a misc amount');
+                  return;
+                }
+                cart.addMiscLine(miscName || 'Others', amount, 1);
+                setMiscName('Others');
+                setMiscAmount('');
+                setShowMiscSale(false);
+                showFeedback(setFlash, 'ok', `Added misc ${formatMoney(amount, currencySymbol)}`);
+              }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-slate-700">Misc sale</p>
+                  <p className="mt-1 text-xs text-slate-500">For bulk commons or small items not logged in inventory.</p>
+                </div>
+                <button type="button" className="min-h-11 px-2 text-sm font-bold text-slate-500" onClick={() => setShowMiscSale(false)}>
+                  Close
+                </button>
+              </div>
+              <div className="grid gap-2 min-[420px]:grid-cols-[minmax(0,1fr)_9rem_auto]">
+                <TextInput
+                  value={miscName}
+                  onChange={(event) => setMiscName(event.target.value)}
+                  placeholder="Others"
+                  disabled={!hasSaleContext}
+                />
+                <TextInput
+                  type="text"
+                  inputMode="decimal"
+                  value={miscAmount}
+                  onChange={(event) => setMiscAmount(sanitizeDecimalInput(event.target.value))}
+                  placeholder="Amount"
+                  disabled={!hasSaleContext}
+                />
+                <Button type="submit" className="min-w-24" disabled={!hasSaleContext || !miscAmount}>Add</Button>
+              </div>
+            </form>
+          )}
+        </div>
       </section>
 
-      <aside className="grid content-start gap-3">
-        <div className="rounded-lg border border-line bg-white p-3 shadow-sm">
+      <aside className="grid content-start gap-3 lg:sticky lg:top-6">
+        <div className="rounded-2xl border border-line bg-white p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-black">Cart</h3>
             <p className="text-sm font-semibold text-slate-600">{cart.lines.length} lines</p>
@@ -337,12 +379,28 @@ export function SellScreen() {
             <div className="flex justify-between text-sm"><span>Subtotal</span><strong>{formatMoney(subtotal, currencySymbol)}</strong></div>
             <Field label="Final total">
               <TextInput
-                type="number"
-                min={0}
-                max={subtotal}
-                step="0.01"
-                value={total}
-                onChange={(event) => cart.setFinalTotal(Math.min(subtotal, Math.max(0, Number(event.target.value) || 0)))}
+                type="text"
+                inputMode="decimal"
+                value={editingFinalTotal ? finalTotalDraft : formatEditableAmount(total)}
+                onFocus={() => {
+                  setEditingFinalTotal(true);
+                  setFinalTotalDraft(formatEditableAmount(total));
+                }}
+                onBlur={() => {
+                  setEditingFinalTotal(false);
+                  setFinalTotalDraft(formatEditableAmount(total));
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Backspace' || event.key === 'Delete') {
+                    event.stopPropagation();
+                  }
+                }}
+                onChange={(event) => {
+                  const nextDraft = sanitizeDecimalInput(event.target.value);
+                  const nextTotal = parseDecimalInput(nextDraft);
+                  setFinalTotalDraft(nextDraft);
+                  cart.setFinalTotal(nextTotal === null ? 0 : Math.min(subtotal, nextTotal));
+                }}
                 disabled={!cart.lines.length}
               />
             </Field>
@@ -424,4 +482,22 @@ function showFeedback(setFlash: (value: { tone: 'ok' | 'error'; text: string }) 
     }
   }
   navigator.vibrate?.(tone === 'ok' ? 40 : [30, 40, 30]);
+}
+
+function sanitizeDecimalInput(value: string) {
+  const clean = value.replace(/[^\d.]/g, '');
+  const firstDot = clean.indexOf('.');
+  if (firstDot === -1) return clean;
+  return clean.slice(0, firstDot + 1) + clean.slice(firstDot + 1).replace(/\./g, '');
+}
+
+function parseDecimalInput(value: string) {
+  if (!value.trim() || value === '.') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatEditableAmount(value: number) {
+  if (!Number.isFinite(value)) return '';
+  return String(Math.round(value * 100) / 100);
 }
